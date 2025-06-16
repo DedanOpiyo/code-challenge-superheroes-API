@@ -23,7 +23,7 @@ class Hero(db.Model, SerializerMixin):
     super_name = db.Column(db.String, nullable=False)
 
     # Relationships
-    hero_powers = db.relationship('HeroPower', back_populates='hero')
+    hero_powers = db.relationship('HeroPower', back_populates='hero', cascade='all, delete-orphan')
     
     # Association proxy to get powers of this hero through hero_powers
     powers = association_proxy('hero_powers', 'power', 
@@ -56,7 +56,7 @@ class Power(db.Model, SerializerMixin):
     description = db.Column(db.String, nullable=False)
 
     # Relationships
-    power_heros = db.relationship('HeroPower', back_populates='power')
+    power_heros = db.relationship('HeroPower', back_populates='power', cascade='all, delete-orphan')
 
     # Association proxy to get heroes of this power through hero_powers
     heroes = association_proxy('hero_powers', 'hero', 

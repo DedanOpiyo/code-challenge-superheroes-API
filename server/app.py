@@ -37,73 +37,106 @@ def index():
 
 @app.route('/heroes', methods=['GET'])
 def heroes():
-    heroes = Hero.query.all()
-    if not heroes:
-        raise APIException("No heroes added yet. Please add one first.")
-    heroes = [hero.to_dict(rules=('-hero_powers',)) for hero in heroes]
-    return make_response(heroes, 200)
+    if request.method == 'GET':
+        heroes = Hero.query.all()
+        if not heroes:
+            raise APIException("No heroes added yet. Please add one first.")
+        heroes = [hero.to_dict(rules=('-hero_powers',)) for hero in heroes]
+        return make_response(heroes, 200)
 
-@app.route('/heroes/<int:id>', methods=['GET'])
+@app.route('/heroes/<int:id>', methods=['GET', 'DELETE'])
 def hero_by_id(id):
     hero = Hero.query.get(id)
     if not hero:
-        return jsonify({"error": "Hero not found"}), 404
-    hero_dict = hero.to_dict(rules=('-hero_powers.hero',))
-    return make_response(hero_dict, 200)
+        raise NotFound("Hero not found") # Hardcode: return jsonify({"error": "Hero not found"}), 404
+    else:
+        if request.method == 'GET':
+            hero_dict = hero.to_dict(rules=('-hero_powers.hero',))
+            return make_response(hero_dict, 200)
+        
+        elif request.method == 'DELETE':
+            db.session.delete(hero)
+            db.session.commit()
+            
+            response_body = {
+                "delete_successful": True,
+                "message": "Hero deleted."
+            }
+            response = make_response(
+                response_body,
+                200
+            )
+            return response
 
 @app.route('/powers', methods=['GET'])
 def powers():
-    powers = Power.query.all()
-    if not powers:
-        raise APIException("No powers added yet. Please add one first.")
-    powers = [hero.to_dict(rules=('-hero_powers',)) for hero in powers]
-    return make_response(powers, 200)
+    if request.method == 'GET':
+        powers = Power.query.all()
+        if not powers:
+            raise APIException("No powers added yet. Please add one first.")
+        powers = [hero.to_dict(rules=('-hero_powers',)) for hero in powers]
+        return make_response(powers, 200)
 
 @app.route('/powers/<int:id>', methods=['GET', 'PATCH'])
 def power_by_id(id):
+    
     power = Power.query.get(id)
     
     if not power:
-        return jsonify({"error": "power not found"}), 404
+        raise NotFound("Power not found") # Error
     
-    if request.method == 'GET':
-        power_dict = power.to_dict(rules=('-power_heroes.power',))
-        return make_response(power_dict, 200)
+    else:
+        if request.method == 'GET':
+            power_dict = power.to_dict(rules=('-power_heroes.power',))
+            return make_response(power_dict, 200)
 
-    if request.method == 'PATCH':
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "No update field provided."}), 404
-        for attr in data:
-            try:
-                setattr(power, attr, data[attr])
-            except:
-                return jsonify({"errors": ["validation errors"]}), 404
-        db.session.commit()
-        data_dict = power.to_dict()
-        return make_response(data_dict, 200)
+        elif request.method == 'PATCH':
+            data = request.get_json()
+            if not data:
+                return jsonify({"error": "No update field provided."}), 404
+            for attr in data:
+                try:
+                    setattr(power, attr, data[attr])
+                except:
+                    return jsonify({"errors": ["validation errors"]}), 422
+            db.session.commit()
+            data_dict = power.to_dict()
+            return make_response(data_dict, 200)
 
 @app.route('/hero_powers', methods=['POST'])
 def post_hero_power():
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "No update field provided."}), 404
-        
-        try:
-            new_hero_power = HeroPower(
-                strength=data["strength"],
-                hero_id=data["hero_id"],
-                power_id=data["power_id"]
-            )
+        if request.method == 'POST':
             
-            db.session.add(new_hero_power)
-            db.session.commit()
-        
-        except:
-            return jsonify({"errors": ["validation errors"]}), 422
-        
+            data = request.get_json()
+            
+            if not data:
+                raise APIException( # Tell client what fields to specify/format their JSON
+                    ["'strength' is rquired", "'hero_id is required", "'power_id is required"], 
+                    status_code=404, 
+                    payload={"missing_fields": {"strength": None, "hero_id": None, "power_id": None}}
+                )
+            else:
+                try:
+                    new_hero_power = HeroPower(
+                        strength=data["strength"],
+                        hero_id=data["hero_id"],
+                        power_id=data["power_id"]
+                    )
+                    
+                    db.session.add(new_hero_power)
+                    db.session.commit()
+                
+                except ValueError: # Errors from custom validation (e.g., wrong strength value)
+                    raise APIException("validation errors", status_code=422)
+                
+                except KeyError:
+                    raise APIException("Missing required field", status_code=400)
+                
+                except: # Default. Any other exception is raised
+                    raise APIException("validation errors", status_code=422)
 
-        return make_response(new_hero_power.to_dict(rules=('-hero.hero_powers', '-power.power_heroes',)), 201)
+                
+                return make_response(new_hero_power.to_dict(rules=('-hero.hero_powers', '-power.power_heroes',)), 201)
 
 # Error handlers
 @app.errorhandler(NotFound)

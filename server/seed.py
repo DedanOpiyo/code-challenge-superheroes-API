@@ -14,6 +14,10 @@ with app.app_context():
     Hero.query.delete()
     Power.query.delete()
     HeroPower.query.delete()
+    
+    # # Comment out db.drop_all() and use it to test ERROR HANDLING/EXCEPTIONS (in app.py - routes)
+    # db.drop_all() # If you uncoment this, comment .query.delete() above
+    # db.create_all()
 
     # 1. Hero table
     for _ in range(10):
